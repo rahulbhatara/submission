@@ -1,0 +1,162 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from statsmodels.tsa.seasonal import seasonal_decompose
+import numpy as np
+import os
+
+st.set_page_config(page_title="Air Quality from Tiantan Analysis by rahulbhatara")
+
+csv_files = [file for file in os.listdir('data/') if file.endswith('.csv')]
+dataframes = []
+for file in csv_files:
+    file_path = os.path.join('data/', file)
+    d = pd.read_csv(file_path)
+    dataframes.append(d)
+
+data = pd.concat(dataframes, ignore_index=True)
+
+st.title('Air Quality Analysis Dashboard: Tiantan Station')
+
+
+
+# Description
+st.write('This interactive dashboard allows users to explore the complex relationship between weather patterns and air quality. By analyzing parameters such as temperature and ozone (O3) levels, the dashboard provides insights into the factors that influence ozone formation and dispersion. Users can visualize and investigate how different weather conditions contribute to varying ozone concentrations, ultimately aiding in a deeper understanding of air quality dynamics.')
+
+
+# About me
+st.markdown("""
+### About Me
+- **Name**: Mhd. Rahul Bhatara Guru
+- **Email Address**: rahulbhataraguru@gmail.com
+- **Dicoding ID**: [rahulbhatara](https://www.dicoding.com/users/rahulbhatara/)
+
+### Project Overview
+By analyzing ozone level data recorded at the Tiantan station, this project investigates how temperature fluctuations influence ozone concentrations in the atmosphere. Examining trends, seasonal variations, and the interplay between temperature and ozone formation, this tool aims to provide valuable insights for environmental monitoring, air quality forecasting, and public health initiatives.
+""")
+
+# Adding a sidebar for interactive inputs
+st.sidebar.header('User Input Features')
+
+# Let users select a year and month to view data
+selected_year = st.sidebar.selectbox('Select Year', list(data['year'].unique()))
+selected_month = st.sidebar.selectbox('Select Month', list(data['month'].unique()))
+
+# Filter data based on the selected year and month
+data_filtered = data[(data['year'] == selected_year) & (data['month'] == selected_month)].copy()
+
+# Displaying data statistics
+st.subheader('Data Overview for Selected Period')
+st.write(data_filtered.describe())
+
+# Line chart for O3 levels over selected month
+st.subheader('Daily O3 Levels')
+fig, ax = plt.subplots()
+ax.step(data_filtered['day'], data_filtered['O3'])
+plt.xlabel('Day of the Month')
+plt.ylabel('O3 Concentration')
+st.pyplot(fig)
+
+# Correlation heatmap for the selected month
+st.subheader('Correlation Heatmap of Air Quality Indicators')
+corr = data_filtered[['PM2.5', 'NO2', 'SO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP']].corr()
+fig, ax = plt.subplots()
+sns.heatmap(corr, annot=True, ax=ax)
+plt.title('Correlation Heatmap')
+st.pyplot(fig)
+
+# Seasonal Trend Analysis
+st.subheader('Seasonal Trend Analysis')
+seasonal_trends = data.groupby('month')['O3'].mean()
+fig, ax = plt.subplots()
+seasonal_trends.plot(kind='bar', color='skyblue', ax=ax)
+plt.title('Average Monthly O3 Levels')
+plt.xlabel('Month')
+plt.ylabel('Average O3')
+st.pyplot(fig)
+
+
+# Daily O3 Levels
+st.subheader('Daily O3 Levels')
+fig, ax = plt.subplots()
+ax.plot(data_filtered['day'], data_filtered['O3'])
+plt.xlabel('Day of the Month')
+plt.ylabel('O3 Concentration')
+st.pyplot(fig)
+
+# Pollutant Distribution
+st.subheader('Pollutant Distribution')
+selected_pollutant = st.selectbox('Select Pollutant', ['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3'])
+fig, ax = plt.subplots()
+sns.boxplot(x='month', y=selected_pollutant, data=data[data['year'] == selected_year], ax=ax)
+st.pyplot(fig)
+
+# Time Series Decomposition of O3
+st.subheader('Time Series Decomposition of O3')
+try:
+    data_filtered['O3'].ffill(inplace=True)
+    decomposed = seasonal_decompose(data_filtered['O3'], model='additive', period=24) # Adjust period as necessary
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 8))
+    decomposed.trend.plot(ax=ax1, title='Trend')
+    decomposed.seasonal.plot(ax=ax2, title='Seasonality')
+    decomposed.resid.plot(ax=ax3, title='Residuals')
+    plt.tight_layout()
+    st.pyplot(fig)
+except ValueError as e:
+    st.error("Unable to perform time series decomposition: " + str(e))
+
+
+# Hourly Averages Heatmap
+st.subheader('Hourly Averages of O3')
+try:
+    # Ensure correct data types and handle missing values
+    data['hour'] = data['hour'].astype(int)
+    data['O3'] = pd.to_numeric(data['O3'], errors='coerce')
+    data['O3'].ffill(inplace=True)
+
+    # Calculate hourly averages
+    hourly_avg = data.groupby('hour')['O3'].mean()
+
+    # Plotting
+    fig, ax = plt.subplots()
+    sns.heatmap([hourly_avg.values], ax=ax, cmap='coolwarm')
+    plt.title('Hourly Averages of O3')
+    st.pyplot(fig)
+except Exception as e:
+    st.error(f"Error in plotting hourly averages: {e}")
+
+# Wind Direction Analysis
+st.subheader('Wind Direction Analysis')
+wind_data = data_filtered.groupby('wd')['O3'].mean()
+fig = plt.figure(figsize=(8, 6))
+ax = fig.add_subplot(111, polar=True)
+theta = np.linspace(0, 2 * np.pi, len(wind_data))
+bars = ax.bar(theta, wind_data.values, align='center', alpha=0.5)
+plt.title('O3 Levels by Wind Direction')
+st.pyplot(fig)
+
+# Rainfall vs. Air Quality
+st.subheader('Rainfall vs. O3 Levels')
+fig, ax = plt.subplots()
+sns.scatterplot(x='RAIN', y='O3', data=data_filtered, ax=ax)
+plt.title('Rainfall vs. O3 Levels')
+st.pyplot(fig)
+
+# Correlation Heatmap - Interactive
+st.subheader('Interactive Correlation Heatmap')
+selected_columns = st.multiselect('Select Columns for Correlation', data.columns, default=['PM2.5', 'NO2', 'TEMP', 'PRES', 'DEWP'])
+corr = data[selected_columns].corr()
+fig, ax = plt.subplots()
+sns.heatmap(corr, annot=True, ax=ax)
+st.pyplot(fig)
+
+
+# Conclusion
+st.subheader('Conclusion')
+st.write("""
+- The dashboard provides an in-depth and interactive analysis of ozone (O3) levels.
+- Various visualizations offer insights into O3 concentrations, their distribution, and factors affecting them.
+- Seasonal trends and the impact of different weather conditions and pollutants on ozone levels are clearly depicted.
+- Users can explore the data dynamically to gain a deeper understanding of ozone trends.
+""")

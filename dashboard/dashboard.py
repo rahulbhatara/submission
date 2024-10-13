@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from statsmodels.tsa.seasonal import seasonal_decompose
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 import os
+from scipy.stats import f_oneway
 
-st.set_page_config(page_title="Air Quality from Tiantan Analysis by rahulbhatara")
+st.title("Air Quality and Weather Data Dashboard")
 
+# Load data
 csv_files = [file for file in os.listdir('data/') if file.endswith('.csv')]
 dataframes = []
 for file in csv_files:
@@ -15,15 +16,7 @@ for file in csv_files:
     d = pd.read_csv(file_path)
     dataframes.append(d)
 
-data = pd.concat(dataframes, ignore_index=True)
-
-st.title('Air Quality Analysis Dashboard: Tiantan Station')
-
-
-
-# Description
-st.write('This interactive dashboard allows users to explore the complex relationship between weather patterns and air quality. By analyzing parameters such as temperature and ozone (O3) levels, the dashboard provides insights into the factors that influence ozone formation and dispersion. Users can visualize and investigate how different weather conditions contribute to varying ozone concentrations, ultimately aiding in a deeper understanding of air quality dynamics.')
-
+df = pd.concat(dataframes, ignore_index=True)
 
 # About me
 st.markdown("""
@@ -36,127 +29,83 @@ st.markdown("""
 By analyzing ozone level data recorded at the Tiantan station, this project investigates how temperature fluctuations influence ozone concentrations in the atmosphere. Examining trends, seasonal variations, and the interplay between temperature and ozone formation, this tool aims to provide valuable insights for environmental monitoring, air quality forecasting, and public health initiatives.
 """)
 
-# Adding a sidebar for interactive inputs
-st.sidebar.header('User Input Features')
+# Display data preview
+st.subheader("Data Preview")
+st.write(df.head())
 
-# Let users select a year and month to view data
-selected_year = st.sidebar.selectbox('Select Year', list(data['year'].unique()))
-selected_month = st.sidebar.selectbox('Select Month', list(data['month'].unique()))
+# Display missing data pattern
+st.subheader("Missing Data Pattern")
+missing_percentage = df.isnull().mean() * 100
+missing_percentage = missing_percentage[missing_percentage > 0]
 
-# Filter data based on the selected year and month
-data_filtered = data[(data['year'] == selected_year) & (data['month'] == selected_month)].copy()
+if not missing_percentage.empty:
+    fig, ax = plt.subplots(figsize=(10, 6))
+    missing_percentage.plot(kind='bar', color='salmon', ax=ax)
+    for p in ax.patches:
+        ax.annotate(f'{p.get_height():.2f}%', (p.get_x() * 1.005, p.get_height() * 1.005), fontsize=12)
+    ax.set_title('Missing Data Pattern')
+    ax.set_xlabel('Column')
+    ax.set_ylabel('Percentage of Missing Data (%)')
+    st.pyplot(fig)
+else:
+    st.write("No missing data!")
 
-# Displaying data statistics
-st.subheader('Data Overview for Selected Period')
-st.write(data_filtered.describe())
+# Data cleaning and handling missing values
+df_fixed = df.copy()
+columns_numerik_to_fill = df_fixed.select_dtypes(include=['float64']).columns
+for col in columns_numerik_to_fill:
+    df_fixed[col].fillna(df_fixed[col].mean(), inplace=True)
+columns_object = df_fixed.select_dtypes(include=['object']).columns
+for col in columns_object:
+    df_fixed[col].fillna(df_fixed[col].mode()[0], inplace=True)
 
-# Line chart for O3 levels over selected month
-st.subheader('Daily O3 Levels')
-fig, ax = plt.subplots()
-ax.step(data_filtered['day'], data_filtered['O3'])
-plt.xlabel('Day of the Month')
-plt.ylabel('O3 Concentration')
+# Create time series data
+df_fixed['date'] = pd.to_datetime(df_fixed[['year', 'month', 'day', 'hour']])
+data_time_series = df_fixed[["date", "PM2.5", "PM10", "SO2", "NO2", "CO", "O3", "TEMP", "PRES", "DEWP", "RAIN", "WSPM"]].set_index('date').resample('W').mean()
+
+# Display TEMP and O3 trends over time
+st.subheader("Weekly Average TEMP and O3 Concentrations")
+fig, ax = plt.subplots(figsize=(15, 6))
+ax.plot(data_time_series.index, data_time_series['O3'], label='O3', color='green')
+ax.plot(data_time_series.index, data_time_series['TEMP'], label='TEMP', color='yellow')
+ax.set_title('Weekly Average TEMP and O3 Concentrations')
+ax.set_xlabel('Date')
+ax.set_ylabel('Concentration')
+ax.legend()
 st.pyplot(fig)
 
-# Correlation heatmap for the selected month
-st.subheader('Correlation Heatmap of Air Quality Indicators')
-corr = data_filtered[['PM2.5', 'NO2', 'SO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP']].corr()
-fig, ax = plt.subplots()
-sns.heatmap(corr, annot=True, ax=ax)
-plt.title('Correlation Heatmap')
+# Display correlation matrix
+st.subheader("Correlation Matrix of Selected Parameters")
+correlation_matrix = df_fixed[['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'RAIN', 'WSPM']].corr()
+fig, ax = plt.subplots(figsize=(12, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5, ax=ax)
+ax.set_title('Correlation Matrix of Selected Parameters', fontsize=16)
 st.pyplot(fig)
 
-# Seasonal Trend Analysis
-st.subheader('Seasonal Trend Analysis')
-seasonal_trends = data.groupby('month')['O3'].mean()
-fig, ax = plt.subplots()
+# Perform ANOVA test
+st.subheader("ANOVA Test Results")
+groups = df_fixed.groupby('year')['TEMP']
+anova_test_data = [group[1] for group in groups]
+anova_test_result = f_oneway(*anova_test_data)
+st.write(f"ANOVA Test Result: {anova_test_result}")
+
+# Display seasonal trends in temperature
+st.subheader("Seasonal Trends: Average Temperature by Month")
+seasonal_trends = df_fixed.groupby('month')['TEMP'].mean()
+fig, ax = plt.subplots(figsize=(10, 6))
 seasonal_trends.plot(kind='bar', color='skyblue', ax=ax)
-plt.title('Average Monthly O3 Levels')
-plt.xlabel('Month')
-plt.ylabel('Average O3')
+ax.set_title('Average Temperature by Month')
+ax.set_xlabel('Month')
+ax.set_ylabel('Average Temperature (°C)')
+ax.set_xticks(range(0, 12))
+ax.set_xticklabels([str(m) for m in range(1, 13)], rotation=0)
 st.pyplot(fig)
 
-
-# Daily O3 Levels
-st.subheader('Daily O3 Levels')
-fig, ax = plt.subplots()
-ax.plot(data_filtered['day'], data_filtered['O3'])
-plt.xlabel('Day of the Month')
-plt.ylabel('O3 Concentration')
+# Display regression plot of TEMP vs O3
+st.subheader("Scatter Plot of Weekly Average TEMP and O3 with Regression Line")
+fig, ax = plt.subplots(figsize=(15, 6))
+sns.regplot(x='TEMP', y='O3', data=data_time_series, scatter_kws={'alpha':0.5}, ax=ax)
+ax.set_title('Scatter Plot of Weekly Average TEMP and O3 with Regression Line')
+ax.set_xlabel('Temperature')
+ax.set_ylabel('O3 Concentration')
 st.pyplot(fig)
-
-# Pollutant Distribution
-st.subheader('Pollutant Distribution')
-selected_pollutant = st.selectbox('Select Pollutant', ['PM2.5', 'PM10', 'SO2', 'NO2', 'CO', 'O3'])
-fig, ax = plt.subplots()
-sns.boxplot(x='month', y=selected_pollutant, data=data[data['year'] == selected_year], ax=ax)
-st.pyplot(fig)
-
-# Time Series Decomposition of O3
-st.subheader('Time Series Decomposition of O3')
-try:
-    data_filtered['O3'].ffill(inplace=True)
-    decomposed = seasonal_decompose(data_filtered['O3'], model='additive', period=24) # Adjust period as necessary
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 8))
-    decomposed.trend.plot(ax=ax1, title='Trend')
-    decomposed.seasonal.plot(ax=ax2, title='Seasonality')
-    decomposed.resid.plot(ax=ax3, title='Residuals')
-    plt.tight_layout()
-    st.pyplot(fig)
-except ValueError as e:
-    st.error("Unable to perform time series decomposition: " + str(e))
-
-
-# Hourly Averages Heatmap
-st.subheader('Hourly Averages of O3')
-try:
-    # Ensure correct data types and handle missing values
-    data['hour'] = data['hour'].astype(int)
-    data['O3'] = pd.to_numeric(data['O3'], errors='coerce')
-    data['O3'].ffill(inplace=True)
-
-    # Calculate hourly averages
-    hourly_avg = data.groupby('hour')['O3'].mean()
-
-    # Plotting
-    fig, ax = plt.subplots()
-    sns.heatmap([hourly_avg.values], ax=ax, cmap='coolwarm')
-    plt.title('Hourly Averages of O3')
-    st.pyplot(fig)
-except Exception as e:
-    st.error(f"Error in plotting hourly averages: {e}")
-
-# Wind Direction Analysis
-st.subheader('Wind Direction Analysis')
-wind_data = data_filtered.groupby('wd')['O3'].mean()
-fig = plt.figure(figsize=(8, 6))
-ax = fig.add_subplot(111, polar=True)
-theta = np.linspace(0, 2 * np.pi, len(wind_data))
-bars = ax.bar(theta, wind_data.values, align='center', alpha=0.5)
-plt.title('O3 Levels by Wind Direction')
-st.pyplot(fig)
-
-# Rainfall vs. Air Quality
-st.subheader('Rainfall vs. O3 Levels')
-fig, ax = plt.subplots()
-sns.scatterplot(x='RAIN', y='O3', data=data_filtered, ax=ax)
-plt.title('Rainfall vs. O3 Levels')
-st.pyplot(fig)
-
-# Correlation Heatmap - Interactive
-st.subheader('Interactive Correlation Heatmap')
-selected_columns = st.multiselect('Select Columns for Correlation', data.columns, default=['PM2.5', 'NO2', 'TEMP', 'PRES', 'DEWP'])
-corr = data[selected_columns].corr()
-fig, ax = plt.subplots()
-sns.heatmap(corr, annot=True, ax=ax)
-st.pyplot(fig)
-
-
-# Conclusion
-st.subheader('Conclusion')
-st.write("""
-- The dashboard provides an in-depth and interactive analysis of ozone (O3) levels.
-- Various visualizations offer insights into O3 concentrations, their distribution, and factors affecting them.
-- Seasonal trends and the impact of different weather conditions and pollutants on ozone levels are clearly depicted.
-- Users can explore the data dynamically to gain a deeper understanding of ozone trends.
-""")

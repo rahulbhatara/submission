@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import os
 from scipy.stats import f_oneway
 
-st.title("Air Quality and Weather Data Dashboard")
+st.set_page_config(page_title="Air Quality from Tiantan Analysis by Rahul Bhatara")
+st.title('Air Quality Analysis Dashboard: Tiantan Station')
 
 # Load data
 csv_files = [file for file in os.listdir('data/') if file.endswith('.csv')]
@@ -81,13 +82,6 @@ fig, ax = plt.subplots(figsize=(12, 8))
 sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=0.5, ax=ax)
 ax.set_title('Correlation Matrix of Selected Parameters', fontsize=16)
 st.pyplot(fig)
-
-# Perform ANOVA test
-st.subheader("ANOVA Test Results")
-groups = df_fixed.groupby('year')['TEMP']
-anova_test_data = [group[1] for group in groups]
-anova_test_result = f_oneway(*anova_test_data)
-st.write(f"ANOVA Test Result: {anova_test_result}")
 
 # Display seasonal trends in temperature
 st.subheader("Seasonal Trends: Average Temperature by Month")

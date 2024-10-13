@@ -21,19 +21,7 @@ To run the Air Quality Analysis Dashboard, follow these steps:
 
 ### Setup Environment
 
-1. **Create and Activate a Python Environment**:
-   - If using Conda (ensure [Conda](https://docs.conda.io/en/latest/) is installed):
-     ```
-     conda create --name airquality-ds python=3.9
-     conda activate airquality-ds
-     ```
-   - If using venv (standard Python environment tool):
-     ```
-     python -m venv airquality-ds
-     source airquality-ds/bin/activate  # On Windows use `airquality-ds\Scripts\activate`
-     ```
-
-2. **Install Required Packages**:
+1. **Install Required Packages**:
    - The following packages are necessary for running the analysis and the dashboard:
      ```
      pip install pandas numpy scipy matplotlib seaborn streamlit statsmodels
@@ -55,4 +43,4 @@ To run the Air Quality Analysis Dashboard, follow these steps:
 ## About Me
 - **Name**: Mhd. Rahul Bhatara Guru
 - **Email Address**: rahulbhataraguru@gmail.com
-- **Dicoding ID**: [maliki_borneo](https://www.dicoding.com/users/rahul_bhatara/)
+- **Dicoding ID**: [rahulbhatara](https://www.dicoding.com/users/rahulbhatara)

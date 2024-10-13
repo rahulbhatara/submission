@@ -12,7 +12,6 @@ By analyzing ozone level data recorded at the Tiantan station, this project inve
 - Matplotlib
 - Seaborn
 - NumPy
-- SciPy
 - Statsmodels
 
 ## How to Run the Dashboard
